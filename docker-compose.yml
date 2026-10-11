@@ -1,0 +1,47 @@
+name: OpenSiem
+
+networks:
+  siem:
+    name: siem
+    driver: bridge
+
+volumes:
+  grafana-data:
+  velociraptor-data:
+
+services:
+  grafana:
+    image: grafana/grafana-oss:latest   # multi-arch, runs on arm64
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set in .env}
+      GF_INSTALL_PLUGINS: grafana-opensearch-datasource   # use for Wazuh indexer
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks: [siem]
+    mem_limit: 512m
+
+  velociraptor:
+    build:
+      context: ./velociraptor
+      args:
+        # Pick the linux-arm64 asset from https://github.com/Velocidex/velociraptor/releases
+        VELOCIRAPTOR_URL: ${VELOCIRAPTOR_URL:?set in .env}
+    container_name: velociraptor
+    restart: unless-stopped
+    ports:
+      - "8000:8000"   # client (agent) frontend
+      - "8889:8889"   # admin GUI
+    environment:
+      VELOCIRAPTOR_HOSTNAME: ${VELOCIRAPTOR_HOSTNAME:?set in .env}   # IP/DNS the agents will connect to
+      VELOCIRAPTOR_ADMIN_USER: admin
+      VELOCIRAPTOR_ADMIN_PASSWORD: ${VELOCIRAPTOR_ADMIN_PASSWORD:?set in .env}
+    volumes:
+      - velociraptor-data:/data
+    networks: [siem]
+    mem_limit: 768m
